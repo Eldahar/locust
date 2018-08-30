@@ -1,5 +1,6 @@
 import re
 import time
+import uuid
 
 import requests
 import six
@@ -51,6 +52,8 @@ class HttpSession(requests.Session):
         super(HttpSession, self).__init__(*args, **kwargs)
 
         self.base_url = base_url
+        self.uuid = uuid.uuid4()
+        self.requestNum = 0
         
         # Check for basic authentication
         parsed_url = urlparse(self.base_url)
@@ -110,15 +113,21 @@ class HttpSession(requests.Session):
         # set up pre_request hook for attaching meta data to the request object
         request_meta["method"] = method
         request_meta["start_time"] = time.time()
-        
+
+        self.requestNum = self.requestNum + 1
+        request_meta['requestNum'] = self.requestNum
         response = self._send_request_safe_mode(method, url, **kwargs)
         
         # record the consumed time
-        request_meta["response_time"] = (time.time() - request_meta["start_time"]) * 1000
-        
-    
-        request_meta["name"] = name or (response.history and response.history[0] or response).request.path_url
-        
+        request_meta["end_time"] = time.time()
+        request_meta["response_time"] = (request_meta["end_time"] - request_meta["start_time"]) * 1000
+        request_meta["uuid"] = self.uuid
+
+        request_meta['requestID'] = str(request_meta['start_time']) + ";" + str(self.uuid) + ";" + str(self.requestNum)
+
+        request_meta["label"] = name
+        request_meta["name"] = (response.history and response.history[0] or response).request.path_url
+
         # get the length of the content, but if the argument stream is set to True, we take
         # the size from the content-length header, in order to not trigger fetching of the body
         if kwargs.get("stream", False):
@@ -145,6 +154,10 @@ class HttpSession(requests.Session):
                     name=request_meta["name"],
                     response_time=request_meta["response_time"],
                     response_length=request_meta["content_size"],
+                    start_time=request_meta["start_time"],
+                    end_time=request_meta["end_time"],
+                    requestid=request_meta["requestID"],
+                    label=str(request_meta["label"])
                 )
             return response
     
@@ -220,6 +233,10 @@ class ResponseContextManager(LocustResponse):
             name=self.locust_request_meta["name"],
             response_time=self.locust_request_meta["response_time"],
             response_length=self.locust_request_meta["content_size"],
+            start_time=self.locust_request_meta["start_time"],
+            end_time=self.locust_request_meta["end_time"],
+            requestid=self.locust_request_meta["requestID"],
+            label=str(self.locust_request_meta["label"])
         )
         self._is_reported = True
     

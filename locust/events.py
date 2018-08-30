@@ -132,3 +132,7 @@ locust_stop_hatching = EventHook()
 """
 *locust_stop_hatching* is fired when terminate the hatching process on any locust worker.
 """
+
+new_locust_client = EventHook()
+locust_client_stop = EventHook()
+
